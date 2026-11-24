@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuth, useMutations, useQuery } from 'deepspace'
-import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
+import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { useLocation } from 'react-router-dom'
 import { SearchInput } from '@/components/ui'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Button, Input, Modal, Textarea } from '@/components/ui'
+import { Button, Input, Modal, Textarea, useToast } from '@/components/ui'
 import { LocationField } from '@/components/LocationField'
 import { SAMPLE_PINS } from '../../../seed'
 
@@ -40,6 +40,22 @@ function LocationMapView({ latitude, longitude }: { latitude: number; longitude:
   return null
 }
 
+function OnboardingMapClick({
+  onSelect,
+}: {
+  onSelect: (latitude: number, longitude: number) => void
+}) {
+  useMapEvents({
+    click(event) {
+      onSelect(
+        Math.round(event.latlng.lat * 100) / 100,
+        Math.round(event.latlng.lng * 100) / 100,
+      )
+    },
+  })
+  return null
+}
+
 export default function HomePage() {
   const { isLoaded, userId } = useAuth()
   if (!isLoaded) return <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted-foreground">Loading...</div>
@@ -51,15 +67,17 @@ function AuthenticatedHome({ userId }: { userId: string }) {
   const { records, status } = useQuery<UserProfile>('user_profiles', {
     where: { id: userId },
   })
-  const { create: createProfile, ready: profileReady } = useMutations<UserProfile>('user_profiles')
+  const { createConfirmed: createProfile, ready: profileReady } = useMutations<UserProfile>('user_profiles')
   const { records: pins, status: pinsStatus } = useQuery<Pin>('pins')
-  const { create: createPin, ready: pinsReady } = useMutations<Pin>('pins')
+  const { createConfirmed: createPin, ready: pinsReady } = useMutations<Pin>('pins')
   const profile = records[0]?.data
   const [region, setRegion] = useState('')
   const [latitude, setLatitude] = useState(37.87)
   const [longitude, setLongitude] = useState(-122.27)
   const [saving, setSaving] = useState(false)
+  const [locationSelected, setLocationSelected] = useState(false)
   const seeded = useRef(false)
+  const { success, error } = useToast()
 
   useEffect(() => {
     if (
@@ -92,7 +110,7 @@ function AuthenticatedHome({ userId }: { userId: string }) {
 
   const saveProfile = async () => {
     const trimmedRegion = region.trim()
-    if (!trimmedRegion || !profileReady) return
+    if (!trimmedRegion || !locationSelected || !profileReady) return
     setSaving(true)
     try {
       await createProfile({
@@ -102,6 +120,9 @@ function AuthenticatedHome({ userId }: { userId: string }) {
         homeLng: rounded(longitude),
         createdAt: Date.now(),
       })
+      success('Location saved', 'Your approximate region is ready.')
+    } catch {
+      error('Could not save location', 'Please try again.')
     } finally {
       setSaving(false)
     }
@@ -112,7 +133,7 @@ function AuthenticatedHome({ userId }: { userId: string }) {
   }
 
   if (profile) {
-    return <RegionMap profile={profile} pins={pins} pinsReady={pinsReady} createPin={createPin} />
+    return <RegionMap profile={profile} pins={pins} pinsStatus={pinsStatus} pinsReady={pinsReady} createPin={createPin} />
   }
 
   return (
@@ -132,11 +153,15 @@ function AuthenticatedHome({ userId }: { userId: string }) {
             <LocationField
               id="home-region"
               value={region}
-              onChange={setRegion}
+              onChange={(nextRegion) => {
+                setRegion(nextRegion)
+                setLocationSelected(false)
+              }}
               onSelect={(suggestion) => {
                 setRegion(suggestion.displayName)
                 setLatitude(rounded(suggestion.latitude))
                 setLongitude(rounded(suggestion.longitude))
+                setLocationSelected(true)
               }}
               placeholder="Berkeley, CA, USA"
             />
@@ -159,6 +184,13 @@ function AuthenticatedHome({ userId }: { userId: string }) {
                 url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               <LocationMapView latitude={latitude} longitude={longitude} />
+              <OnboardingMapClick
+                onSelect={(nextLatitude, nextLongitude) => {
+                  setLatitude(nextLatitude)
+                  setLongitude(nextLongitude)
+                  setLocationSelected(true)
+                }}
+              />
               <Marker
                 position={[latitude, longitude]}
                 icon={L.divIcon({
@@ -180,7 +212,7 @@ function AuthenticatedHome({ userId }: { userId: string }) {
         <Button
           className="w-full sm:w-auto"
           onClick={saveProfile}
-          disabled={!region.trim()}
+          disabled={!region.trim() || !locationSelected}
           loading={saving}
         >
           Save location
@@ -215,11 +247,13 @@ function MapSelection({
 function RegionMap({
   profile,
   pins,
+  pinsStatus,
   pinsReady,
   createPin,
 }: {
   profile: UserProfile
   pins: Array<{ recordId: string; data: Pin }>
+  pinsStatus: string
   pinsReady: boolean
   createPin: (data: Pin) => Promise<string>
 }) {
@@ -228,6 +262,9 @@ function RegionMap({
   const [meaning, setMeaning] = useState('')
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+  const [wordError, setWordError] = useState('')
+  const [meaningError, setMeaningError] = useState('')
+  const { success, error } = useToast()
   const location = useLocation()
   const stateSelection =
     (location.state as { selectedPinId?: string } | null)?.selectedPinId
@@ -259,7 +296,19 @@ function RegionMap({
   const savePin = async () => {
     const trimmedWord = word.trim()
     const trimmedMeaning = meaning.trim()
-    if (!trimmedWord || !trimmedMeaning || !pinsReady) return
+    const nextWordError = !trimmedWord
+      ? 'Enter a word or phrase.'
+      : trimmedWord.length > 60
+        ? 'Keep the word or phrase to 60 characters.'
+        : ''
+    const nextMeaningError = !trimmedMeaning
+      ? 'Enter a meaning.'
+      : trimmedMeaning.length > 240
+        ? 'Keep the meaning to 240 characters.'
+        : ''
+    setWordError(nextWordError)
+    setMeaningError(nextMeaningError)
+    if (nextWordError || nextMeaningError || !pinsReady) return
 
     setSaving(true)
     try {
@@ -278,7 +327,12 @@ function RegionMap({
       })
       setWord('')
       setMeaning('')
+      setWordError('')
+      setMeaningError('')
       setCreateOpen(false)
+      success('Pin added', 'Your regionalism is now on the map.')
+    } catch {
+      error('Could not add pin', 'Please try again.')
     } finally {
       setSaving(false)
     }
@@ -320,6 +374,18 @@ function RegionMap({
           ))}
         </MapContainer>
 
+        {pinsStatus === 'loading' && (
+          <div className="absolute inset-x-0 top-20 z-[1000] mx-auto w-fit rounded-lg border border-border bg-card px-4 py-2 text-sm text-muted-foreground shadow-lg" aria-live="polite">
+            Loading pins...
+          </div>
+        )}
+        {pinsStatus === 'ready' && pins.length === 0 && (
+          <div className="absolute left-1/2 top-20 z-[1000] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-lg border border-border bg-card p-4 text-center shadow-lg">
+            <p className="font-medium text-foreground">No regionalisms yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">Be the first to add a word or phrase.</p>
+          </div>
+        )}
+
         <button
           type="button"
           aria-label="Create a pin"
@@ -342,9 +408,13 @@ function RegionMap({
           />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {filteredPins.length === 0 ? (
+          {pinsStatus === 'loading' ? (
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground" aria-live="polite">
+              Loading pins...
+            </p>
+          ) : filteredPins.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-              No regionalisms found.
+              {search.trim() ? 'No regionalisms found.' : 'No regionalisms yet. Add the first pin.'}
             </p>
           ) : filteredPins.map(({ recordId, data }) => (
             <button
@@ -379,21 +449,39 @@ function RegionMap({
               <Input
                 id="pin-word"
                 value={word}
-                onChange={(event) => setWord(event.target.value)}
+                onChange={(event) => {
+                  setWord(event.target.value)
+                  if (wordError) setWordError('')
+                }}
                 maxLength={60}
                 placeholder="e.g. butty"
+                aria-invalid={Boolean(wordError)}
+                aria-describedby={wordError ? 'pin-word-error' : undefined}
               />
+              <div className="mt-1 flex justify-between text-xs">
+                {wordError && <span id="pin-word-error" className="text-destructive">{wordError}</span>}
+                <span className="ml-auto text-muted-foreground">{word.length}/60</span>
+              </div>
             </div>
             <div>
               <label htmlFor="pin-meaning" className="mb-1.5 block text-sm font-medium">Meaning</label>
               <Textarea
                 id="pin-meaning"
                 value={meaning}
-                onChange={(event) => setMeaning(event.target.value)}
+                onChange={(event) => {
+                  setMeaning(event.target.value)
+                  if (meaningError) setMeaningError('')
+                }}
                 maxLength={240}
                 placeholder="What does it mean?"
                 className="min-h-24"
+                aria-invalid={Boolean(meaningError)}
+                aria-describedby={meaningError ? 'pin-meaning-error' : undefined}
               />
+              <div className="mt-1 flex justify-between text-xs">
+                {meaningError && <span id="pin-meaning-error" className="text-destructive">{meaningError}</span>}
+                <span className="ml-auto text-muted-foreground">{meaning.length}/240</span>
+              </div>
             </div>
           </div>
         </Modal.Body>
@@ -401,7 +489,7 @@ function RegionMap({
           <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
           <Button
             onClick={savePin}
-            disabled={!word.trim() || !meaning.trim()}
+            disabled={!word.trim() || !meaning.trim() || word.trim().length > 60 || meaning.trim().length > 240}
             loading={saving}
           >
             Add pin

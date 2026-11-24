@@ -37,7 +37,9 @@ export default function PinListPage() {
         {status === 'loading' ? (
           <p className="py-10 text-center text-sm text-muted-foreground">Loading regionalisms...</p>
         ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">No regionalisms found.</p>
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            {query ? 'No regionalisms found.' : 'No regionalisms yet. Add the first pin from the map.'}
+          </p>
         ) : filtered.map(({ recordId, data }) => (
           <button
             key={recordId}

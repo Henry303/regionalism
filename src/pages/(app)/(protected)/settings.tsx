@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signOut, useAuth, useMutations, useQuery } from 'deepspace'
+import { signOut, useAuth, useAuthUser, useMutations, useQuery } from 'deepspace'
 import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Button, ConfirmModal, Input, Modal, Textarea } from '@/components/ui'
+import { Button, ConfirmModal, Input, Modal, Textarea, useToast } from '@/components/ui'
 import { LocationField } from '@/components/LocationField'
 import { isDefaultSamplePin } from '../../../seed'
 
@@ -41,6 +41,7 @@ function LocationMapView({ latitude, longitude }: { latitude: number; longitude:
 
 export default function SettingsPage() {
   const { userId } = useAuth()
+  const { user } = useAuthUser()
   const navigate = useNavigate()
   const { records: profiles, status: profileStatus } = useQuery<UserProfile>('user_profiles', {
     where: { id: userId ?? '' },
@@ -51,6 +52,7 @@ export default function SettingsPage() {
   const pins = ownedPinRecords.filter(({ data }) => !isDefaultSamplePin(data))
   const profileMutation = useMutations<UserProfile>('user_profiles')
   const pinMutation = useMutations<Pin>('pins')
+  const { success, error } = useToast()
 
   const profileEnvelope = profiles[0]
   const profile = profileEnvelope?.data
@@ -94,6 +96,10 @@ export default function SettingsPage() {
         homeLat: rounded(latitude),
         homeLng: rounded(longitude),
       })
+      setLocationSelected(false)
+      success('Location updated', 'Your general location has been saved.')
+    } catch {
+      error('Could not update location', 'Please try again.')
     } finally {
       setSavingProfile(false)
     }
@@ -106,15 +112,24 @@ export default function SettingsPage() {
   }
 
   const savePin = async () => {
-    if (!editPinId || !editWord.trim() || !editMeaning.trim()) return
+    if (
+      !editPinId ||
+      !editWord.trim() ||
+      !editMeaning.trim() ||
+      editWord.trim().length > 60 ||
+      editMeaning.trim().length > 240
+    ) return
     setSavingPin(true)
     try {
-      await pinMutation.put(editPinId, {
+      await pinMutation.putConfirmed(editPinId, {
         word: editWord.trim(),
         meaning: editMeaning.trim(),
         updatedAt: Date.now(),
       })
       setEditPinId(null)
+      success('Pin updated', 'Your changes are live.')
+    } catch {
+      error('Could not update pin', 'Please try again.')
     } finally {
       setSavingPin(false)
     }
@@ -124,8 +139,11 @@ export default function SettingsPage() {
     if (!deletePinId) return
     setDeletingPin(true)
     try {
-      await pinMutation.remove(deletePinId)
+      await pinMutation.removeConfirmed(deletePinId)
       setDeletePinId(null)
+      success('Pin deleted')
+    } catch {
+      error('Could not delete pin', 'Please try again.')
     } finally {
       setDeletingPin(false)
     }
@@ -134,10 +152,12 @@ export default function SettingsPage() {
   const deleteAccount = async () => {
     setDeletingAccount(true)
     try {
-      await Promise.all(pins.map(({ recordId }) => pinMutation.remove(recordId)))
-      if (profileEnvelope) await profileMutation.remove(profileEnvelope.recordId)
+      await Promise.all(pins.map(({ recordId }) => pinMutation.removeConfirmed(recordId)))
+      if (profileEnvelope) await profileMutation.removeConfirmed(profileEnvelope.recordId)
       await signOut()
       navigate('/', { replace: true })
+    } catch {
+      error('Could not delete account data', 'Please try again.')
     } finally {
       setDeletingAccount(false)
       setDeleteAccountOpen(false)
@@ -151,6 +171,9 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto min-h-full max-w-3xl px-4 py-8 sm:px-6">
       <h1 className="text-2xl font-bold">Profile</h1>
+      {user?.primaryEmailAddress?.emailAddress && (
+        <p className="mt-1 text-sm text-muted-foreground">{user.primaryEmailAddress.emailAddress}</p>
+      )}
 
       <section className="mt-6 rounded-lg border border-border bg-card p-5">
         <h2 className="text-lg font-semibold">General location</h2>
@@ -238,8 +261,8 @@ export default function SettingsPage() {
                     <p className="mt-2 text-xs font-medium text-primary">{data.regionLabel}</p>
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => openEditPin(recordId, data)}>Edit</Button>
-                    <Button variant="destructive" size="sm" onClick={() => setDeletePinId(recordId)}>Delete</Button>
+                    <Button variant="secondary" size="sm" className="min-h-11 md:min-h-9" onClick={() => openEditPin(recordId, data)}>Edit</Button>
+                    <Button variant="destructive" size="sm" className="min-h-11 md:min-h-9" onClick={() => setDeletePinId(recordId)}>Delete</Button>
                   </div>
                 </div>
               </article>
@@ -249,8 +272,23 @@ export default function SettingsPage() {
       </section>
 
       <section className="mt-6 flex flex-wrap gap-3 rounded-lg border border-border bg-card p-5">
-        <Button variant="secondary" onClick={() => signOut()}>Log out</Button>
-        <Button variant="destructive" onClick={() => setDeleteAccountOpen(true)}>Delete account</Button>
+        <Button
+          variant="secondary"
+          className="min-h-11 md:min-h-10"
+          onClick={async () => {
+            await signOut()
+            navigate('/', { replace: true })
+          }}
+        >
+          Log out
+        </Button>
+        <Button
+          variant="destructive"
+          className="min-h-11 md:min-h-10"
+          onClick={() => setDeleteAccountOpen(true)}
+        >
+          Delete account
+        </Button>
       </section>
 
       <Modal open={editPinId !== null} onClose={() => setEditPinId(null)} size="sm">
@@ -262,16 +300,24 @@ export default function SettingsPage() {
             <div>
               <label htmlFor="edit-word" className="mb-1.5 block text-sm font-medium">Word/Phrase</label>
               <Input id="edit-word" value={editWord} onChange={(event) => setEditWord(event.target.value)} maxLength={60} />
+              <p className="mt-1 text-right text-xs text-muted-foreground">{editWord.length}/60</p>
             </div>
             <div>
               <label htmlFor="edit-meaning" className="mb-1.5 block text-sm font-medium">Meaning</label>
               <Textarea id="edit-meaning" value={editMeaning} onChange={(event) => setEditMeaning(event.target.value)} maxLength={240} className="min-h-24" />
+              <p className="mt-1 text-right text-xs text-muted-foreground">{editMeaning.length}/240</p>
             </div>
           </div>
         </Modal.Body>
         <Modal.Footer>
           <Button variant="ghost" onClick={() => setEditPinId(null)}>Cancel</Button>
-          <Button onClick={savePin} disabled={!editWord.trim() || !editMeaning.trim()} loading={savingPin}>Save pin</Button>
+          <Button
+            onClick={savePin}
+            disabled={!editWord.trim() || !editMeaning.trim() || editWord.trim().length > 60 || editMeaning.trim().length > 240}
+            loading={savingPin}
+          >
+            Save pin
+          </Button>
         </Modal.Footer>
       </Modal>
 

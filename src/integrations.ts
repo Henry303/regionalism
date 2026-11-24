@@ -15,9 +15,9 @@
  * IMPORTANT: any integration backed by per-user connected accounts (Google,
  * Composio) must be 'user' — the api-worker resolves the account from the
  * JWT subject. With 'developer' the app owner's JWT is forwarded, so every
- * signed-in user connects and acts on the app owner's account. Server code
- * that acts for a user in the background (e.g. a cron job) uses
- * `callComposio(env, ..., { asUser })` from 'deepspace/worker' instead.
+ * signed-in user connects and acts on the app owner's account. Server-side
+ * code acting on a specific user's account should use
+ * `callComposio(env, ..., { asUser })` from 'deepspace/worker'.
  */
 
 export const integrations: Record<

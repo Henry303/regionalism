@@ -59,8 +59,8 @@ export default defineConfig({
     // transient "Cannot read properties of null (reading 'useState')" can surface before
     // the error boundary recovers. Point the scanner at the route files (plus the html
     // entry) so the first optimize pass is complete and no late re-optimize fires.
-    // Scoped to src/pages (NOT all of src) so worker-only modules — actions, cron, jobs,
-    // ai, which import deepspace/worker — are not dragged into the client optimizer.
+    // Scoped to src/pages (NOT all of src) so worker-only modules — actions and ai,
+    // which import deepspace/worker — are not dragged into the client optimizer.
     // Dev-only; `vite build` ignores optimizeDeps.
     entries: ['./index.html', './src/pages/**/*.tsx'],
   },

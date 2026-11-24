@@ -6,7 +6,8 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Button, ConfirmModal, Input, Modal, Textarea, useToast } from '@/components/ui'
 import { LocationField } from '@/components/LocationField'
-import { isDefaultSamplePin } from '../../../seed'
+import { deleteOwnedPins, deletePin as removePin, updatePin } from '../../../pin-actions'
+import type { PinData } from '../../../pin-actions'
 
 interface UserProfile {
   id: string
@@ -16,17 +17,8 @@ interface UserProfile {
   createdAt: number
 }
 
-interface Pin {
-  id: string
+interface Pin extends PinData {
   ownerId: string
-  word: string
-  meaning: string
-  regionLabel: string
-  lat: number
-  lng: number
-  createdAt: number
-  updatedAt: number
-  isDefault?: boolean
 }
 
 function LocationMapView({ latitude, longitude }: { latitude: number; longitude: number }) {
@@ -47,11 +39,10 @@ export default function SettingsPage() {
     where: { id: userId ?? '' },
   })
   const { records: ownedPinRecords, status: pinsStatus } = useQuery<Pin>('pins', {
-    where: { ownerId: userId ?? '', isDefault: false },
+    where: { ownerId: userId ?? '' },
   })
-  const pins = ownedPinRecords.filter(({ data }) => !isDefaultSamplePin(data))
+  const pins = ownedPinRecords.filter(({ data }) => !data.isDefault)
   const profileMutation = useMutations<UserProfile>('user_profiles')
-  const pinMutation = useMutations<Pin>('pins')
   const { success, error } = useToast()
 
   const profileEnvelope = profiles[0]
@@ -121,15 +112,17 @@ export default function SettingsPage() {
     ) return
     setSavingPin(true)
     try {
-      await pinMutation.putConfirmed(editPinId, {
+      await updatePin(editPinId, {
         word: editWord.trim(),
         meaning: editMeaning.trim(),
-        updatedAt: Date.now(),
       })
       setEditPinId(null)
       success('Pin updated', 'Your changes are live.')
-    } catch {
-      error('Could not update pin', 'Please try again.')
+    } catch (cause) {
+      error(
+        'Could not update pin',
+        cause instanceof Error ? cause.message : 'Please try again.',
+      )
     } finally {
       setSavingPin(false)
     }
@@ -139,11 +132,14 @@ export default function SettingsPage() {
     if (!deletePinId) return
     setDeletingPin(true)
     try {
-      await pinMutation.removeConfirmed(deletePinId)
+      await removePin(deletePinId)
       setDeletePinId(null)
       success('Pin deleted')
-    } catch {
-      error('Could not delete pin', 'Please try again.')
+    } catch (cause) {
+      error(
+        'Could not delete pin',
+        cause instanceof Error ? cause.message : 'Please try again.',
+      )
     } finally {
       setDeletingPin(false)
     }
@@ -152,7 +148,7 @@ export default function SettingsPage() {
   const deleteAccount = async () => {
     setDeletingAccount(true)
     try {
-      await Promise.all(pins.map(({ recordId }) => pinMutation.removeConfirmed(recordId)))
+      await deleteOwnedPins()
       if (profileEnvelope) await profileMutation.removeConfirmed(profileEnvelope.recordId)
       await signOut()
       navigate('/', { replace: true })

@@ -1,19 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from 'deepspace'
 import { SearchInput } from '@/components/ui'
-
-interface Pin {
-  id: string
-  word: string
-  meaning: string
-  regionLabel: string
-  lat: number
-  lng: number
-}
+import { usePublicPins } from '../../../pin-actions'
 
 export default function PinListPage() {
-  const { records, status } = useQuery<Pin>('pins')
+  const { records, status } = usePublicPins()
   const [search, setSearch] = useState('')
   const navigate = useNavigate()
   const query = search.trim().toLowerCase()

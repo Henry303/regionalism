@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth, useMutations, useQuery } from 'deepspace'
 import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { useLocation } from 'react-router-dom'
@@ -7,7 +7,8 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Button, Input, Modal, Textarea, useToast } from '@/components/ui'
 import { LocationField } from '@/components/LocationField'
-import { SAMPLE_PINS } from '../../../seed'
+import { createPin, usePublicPins } from '../../../pin-actions'
+import type { PinData } from '../../../pin-actions'
 
 interface UserProfile {
   id: string
@@ -15,19 +16,6 @@ interface UserProfile {
   homeLat: number
   homeLng: number
   createdAt: number
-}
-
-interface Pin {
-  id: string
-  ownerId: string
-  word: string
-  meaning: string
-  regionLabel: string
-  lat: number
-  lng: number
-  createdAt: number
-  updatedAt: number
-  isDefault?: boolean
 }
 
 function LocationMapView({ latitude, longitude }: { latitude: number; longitude: number }) {
@@ -68,43 +56,14 @@ function AuthenticatedHome({ userId }: { userId: string }) {
     where: { id: userId },
   })
   const { createConfirmed: createProfile, ready: profileReady } = useMutations<UserProfile>('user_profiles')
-  const { records: pins, status: pinsStatus } = useQuery<Pin>('pins')
-  const { createConfirmed: createPin, ready: pinsReady } = useMutations<Pin>('pins')
+  const { records: pins, status: pinsStatus } = usePublicPins()
   const profile = records[0]?.data
   const [region, setRegion] = useState('')
   const [latitude, setLatitude] = useState(37.87)
   const [longitude, setLongitude] = useState(-122.27)
   const [saving, setSaving] = useState(false)
   const [locationSelected, setLocationSelected] = useState(false)
-  const seeded = useRef(false)
   const { success, error } = useToast()
-
-  useEffect(() => {
-    if (
-      seeded.current ||
-      pinsStatus !== 'ready' ||
-      !pinsReady ||
-      pins.length > 0
-    ) {
-      return
-    }
-    seeded.current = true
-    const now = Date.now()
-    void Promise.all(SAMPLE_PINS.map((sample) =>
-      createPin({
-        id: crypto.randomUUID(),
-        ownerId: userId,
-        word: sample.word,
-        meaning: sample.meaning,
-        regionLabel: sample.regionLabel,
-        lat: sample.lat,
-        lng: sample.lng,
-        createdAt: now,
-        updatedAt: now,
-        isDefault: true,
-      }),
-    ))
-  }, [pinsStatus, pinsReady, pins.length, createPin, userId])
 
   const rounded = (value: number) => Math.round(value * 100) / 100
 
@@ -133,7 +92,7 @@ function AuthenticatedHome({ userId }: { userId: string }) {
   }
 
   if (profile) {
-    return <RegionMap profile={profile} pins={pins} pinsStatus={pinsStatus} pinsReady={pinsReady} createPin={createPin} />
+    return <RegionMap profile={profile} pins={pins} pinsStatus={pinsStatus} />
   }
 
   return (
@@ -227,7 +186,7 @@ function MapSelection({
   pins,
 }: {
   selectedPinId: string | null
-  pins: Array<{ recordId: string; data: Pin }>
+  pins: Array<{ recordId: string; data: PinData }>
 }) {
   const map = useMap()
 
@@ -248,14 +207,10 @@ function RegionMap({
   profile,
   pins,
   pinsStatus,
-  pinsReady,
-  createPin,
 }: {
   profile: UserProfile
-  pins: Array<{ recordId: string; data: Pin }>
+  pins: Array<{ recordId: string; data: PinData }>
   pinsStatus: string
-  pinsReady: boolean
-  createPin: (data: Pin) => Promise<string>
 }) {
   const [createOpen, setCreateOpen] = useState(false)
   const [word, setWord] = useState('')
@@ -308,22 +263,20 @@ function RegionMap({
         : ''
     setWordError(nextWordError)
     setMeaningError(nextMeaningError)
-    if (nextWordError || nextMeaningError || !pinsReady) return
+    if (nextWordError || nextMeaningError) return
+    if (pinsStatus !== 'ready') {
+      error('Still connecting', 'Wait for the map to connect, then add your pin.')
+      return
+    }
 
     setSaving(true)
     try {
-      const now = Date.now()
       await createPin({
-        id: crypto.randomUUID(),
-        ownerId: profile.id,
         word: trimmedWord,
         meaning: trimmedMeaning,
         regionLabel: profile.homeRegion,
         lat: Math.round(profile.homeLat * 100) / 100,
         lng: Math.round(profile.homeLng * 100) / 100,
-        createdAt: now,
-        updatedAt: now,
-        isDefault: false,
       })
       setWord('')
       setMeaning('')
@@ -331,8 +284,11 @@ function RegionMap({
       setMeaningError('')
       setCreateOpen(false)
       success('Pin added', 'Your regionalism is now on the map.')
-    } catch {
-      error('Could not add pin', 'Please try again.')
+    } catch (cause) {
+      error(
+        'Could not add pin',
+        cause instanceof Error ? cause.message : 'Please try again.',
+      )
     } finally {
       setSaving(false)
     }
@@ -390,7 +346,7 @@ function RegionMap({
           type="button"
           aria-label="Create a pin"
           onClick={() => setCreateOpen(true)}
-          className="absolute bottom-20 right-5 z-[1000] flex h-14 w-14 items-center justify-center rounded-full bg-primary text-3xl leading-none text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:bottom-6 md:right-6"
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-5 z-[1000] flex h-14 w-14 items-center justify-center rounded-full bg-primary text-3xl leading-none text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:bottom-6 md:right-6"
         >
           +
         </button>
@@ -484,15 +440,20 @@ function RegionMap({
               </div>
             </div>
           </div>
+          {pinsStatus !== 'ready' && (
+            <p className="text-sm text-muted-foreground" aria-live="polite">
+              Connecting to the map. Pin creation will be available shortly.
+            </p>
+          )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
           <Button
             onClick={savePin}
-            disabled={!word.trim() || !meaning.trim() || word.trim().length > 60 || meaning.trim().length > 240}
-            loading={saving}
+            disabled={pinsStatus !== 'ready' || !word.trim() || !meaning.trim() || word.trim().length > 60 || meaning.trim().length > 240}
+            loading={saving || pinsStatus !== 'ready'}
           >
-            Add pin
+            {pinsStatus === 'ready' ? 'Add pin' : 'Connecting...'}
           </Button>
         </Modal.Footer>
       </Modal>

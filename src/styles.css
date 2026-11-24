@@ -6,18 +6,14 @@
 @source "../node_modules/deepspace/dist/**/*.js";
 
 /*
- * Theming — pure shadcn/ui CSS variables with [data-theme] selectors.
- *
- * The @theme block below holds the default theme (slate). All other themes
- * live in `themes.css` as `[data-theme="<id>"]` override blocks. Switching
- * themes = changing the data-theme attribute on <html> in index.html. No
- * JS, no FOUC.
+ * The @theme block provides base tokens; themes.css overrides them for
+ * Regionalism's active theme, selected on <html> in index.html.
  *
  * Status colors (success, warning, info) are intentionally NOT themed —
  * they stay consistent across every preset.
  */
 @theme {
-  /* shadcn core tokens — slate (default): neutral gray on near-black, indigo accent */
+  /* shadcn core tokens — neutral dark defaults overridden by themes.css */
   --color-background: #0a0a0a;
   --color-foreground: #e8eaed;
   --color-card: #161616;
@@ -60,15 +56,15 @@
   --color-info-foreground: #ffffff;
 
   /*
-   * Shadows — slate (default). Each theme in themes.css tunes these.
+   * Shadows — defaults overridden by the Regionalism theme in themes.css.
    *
    * Toned down 2026-05: previous values were 8px/12px offset with
    * 32px/40px blur which read as a heavy halo under every Card on
    * the page. New values are Linear/Stripe-style: barely-there at
    * rest, slightly more present on hover.
    *
-   * IMPORTANT: starter components (`Card`, `Dialog`, `CardGrid`,
-   * `Navigation`, `Toast`) intentionally use literal shadow values
+   * IMPORTANT: `Dialog`, `Navigation`, and `Toast` intentionally use literal
+   * shadow values
    * via `shadow-[…]` arbitrary-value classes, NOT the
    * `shadow-card` / `shadow-card-hover` token classes Tailwind v4
    * generates from this @theme block. Why: Tailwind's @theme directive
@@ -195,8 +191,15 @@
 
   html, body, #root {
     min-height: 100vh;
+    min-height: 100dvh;
     background-color: var(--color-background);
     scroll-behavior: smooth;
+  }
+
+  .app-viewport {
+    height: 100vh;
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top);
   }
 
   body {
@@ -244,7 +247,7 @@
    *
    * Per-component focus indicators (e.g. shadcn's
    * `focus-visible:ring-1` on Button, `focus-visible:border-ring` on
-   * Input / Textarea / Select) are sufficient for keyboard
+   * Input / Textarea) are sufficient for keyboard
    * accessibility and don't bleed onto containers.
    *
    * If you DO need a global indicator for very keyboard-heavy apps,

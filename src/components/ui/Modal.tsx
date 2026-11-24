@@ -82,10 +82,9 @@ interface ModalTitleProps {
 }
 
 function ModalTitle({ children, className = '' }: ModalTitleProps): JSX.Element {
-  // min-w-0 + truncate: long unbroken strings (filenames, URLs) ellipsize
-  // instead of stretching the dialog.
+  // Allow long titles to wrap instead of stretching the dialog.
   return (
-    <DTitle className={cn('min-w-0 truncate', className)}>
+    <DTitle className={cn('min-w-0 whitespace-normal break-words', className)}>
       {children}
     </DTitle>
   )

@@ -54,7 +54,7 @@ export default function Navigation() {
 
       <nav
         aria-label="Mobile navigation"
-        className="fixed bottom-3 left-1/2 z-[1100] grid h-16 w-[calc(100%-24px)] max-w-md -translate-x-1/2 grid-cols-3 rounded-full border border-border bg-card/95 px-2 shadow-lg backdrop-blur md:hidden"
+        className="fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 z-[1100] grid h-16 w-[calc(100%-24px)] max-w-md -translate-x-1/2 grid-cols-3 rounded-full border border-border bg-card/95 px-2 shadow-lg backdrop-blur md:hidden"
       >
         <Link
           to="/home"

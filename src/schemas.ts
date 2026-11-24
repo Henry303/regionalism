@@ -9,13 +9,13 @@
 
 import type { CollectionSchema } from 'deepspace/schema'
 import { usersSchema } from './schemas/users-schema'
-import { settingsSchema } from './schemas/admin-schema'
 import { userProfilesSchema } from './schemas/user-profiles-schema'
 import { pinsSchema } from './schemas/pins-schema'
+import { publicPinsSchema } from './schemas/public-pins-schema'
 
 export const schemas: CollectionSchema[] = [
   usersSchema,
-  settingsSchema,
   userProfilesSchema,
   pinsSchema,
+  publicPinsSchema,
 ]

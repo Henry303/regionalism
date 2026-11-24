@@ -24,7 +24,10 @@ export function LocationField({
 }: LocationFieldProps) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([])
   const [open, setOpen] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [hovered, setHovered] = useState(false)
   const requestId = useRef(0)
+  const active = open && (focused || hovered)
 
   useEffect(() => {
     const query = value.trim()
@@ -78,7 +81,11 @@ export function LocationField({
   }, [value])
 
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <Input
         id={id}
         value={value}
@@ -86,20 +93,27 @@ export function LocationField({
           onChange(event.target.value)
           setOpen(true)
         }}
-        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        onBlur={() => setFocused(false)}
+        onFocus={() => {
+          setFocused(true)
+          if (suggestions.length > 0) setOpen(true)
+        }}
         placeholder={placeholder}
         maxLength={120}
         autoComplete="off"
         role="combobox"
-        aria-expanded={open}
+        aria-expanded={active}
         aria-controls={`${id}-suggestions`}
       />
-      {open && suggestions.length > 0 && (
+      {suggestions.length > 0 && (
         <div
           id={`${id}-suggestions`}
           role="listbox"
-          className="absolute inset-x-0 top-full z-[1200] mt-1 max-h-60 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg"
+          aria-hidden={!active}
+          inert={!active}
+          className={`absolute inset-x-0 top-full z-[1200] mt-1 max-h-60 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg transition-opacity duration-200 ${
+            active ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
         >
           {suggestions.map((suggestion) => (
             <button

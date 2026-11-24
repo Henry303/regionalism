@@ -19,7 +19,7 @@
 export const THEMES = [
   {
     id: 'regionism',
-    label: 'Region-ism',
+    label: 'Regionalism',
     description: 'Light minimalist theme with the Regionalism accent.',
   },
   {

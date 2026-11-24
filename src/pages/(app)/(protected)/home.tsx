@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth, useMutations, useQuery } from 'deepspace'
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
+import { useLocation } from 'react-router-dom'
+import { SearchInput } from '@/components/ui'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Button, Input, Modal, Textarea } from '@/components/ui'
+import { LocationField } from '@/components/LocationField'
 import { SAMPLE_PINS } from '../../../seed'
 
 interface UserProfile {
@@ -24,6 +27,17 @@ interface Pin {
   lng: number
   createdAt: number
   updatedAt: number
+  isDefault?: boolean
+}
+
+function LocationMapView({ latitude, longitude }: { latitude: number; longitude: number }) {
+  const map = useMap()
+
+  useEffect(() => {
+    map.flyTo([latitude, longitude], Math.max(map.getZoom(), 5), { duration: 0.35 })
+  }, [latitude, longitude, map])
+
+  return null
 }
 
 export default function HomePage() {
@@ -69,19 +83,12 @@ function AuthenticatedHome({ userId }: { userId: string }) {
         lng: sample.lng,
         createdAt: now,
         updatedAt: now,
+        isDefault: true,
       }),
     ))
   }, [pinsStatus, pinsReady, pins.length, createPin, userId])
 
   const rounded = (value: number) => Math.round(value * 100) / 100
-
-  const chooseMapLocation = (event: MouseEvent<HTMLElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
-    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
-    setLongitude(rounded(x * 360 - 180))
-    setLatitude(rounded(90 - y * 180))
-  }
 
   const saveProfile = async () => {
     const trimmedRegion = region.trim()
@@ -122,28 +129,48 @@ function AuthenticatedHome({ userId }: { userId: string }) {
             <label htmlFor="home-region" className="mb-1.5 block text-sm font-medium">
               Town, State/Region, Country
             </label>
-            <Input
+            <LocationField
               id="home-region"
               value={region}
-              onChange={(event) => setRegion(event.target.value)}
+              onChange={setRegion}
+              onSelect={(suggestion) => {
+                setRegion(suggestion.displayName)
+                setLatitude(rounded(suggestion.latitude))
+                setLongitude(rounded(suggestion.longitude))
+              }}
               placeholder="Berkeley, CA, USA"
-              maxLength={120}
             />
           </div>
-          <button
-            type="button"
-            aria-label="Choose approximate location on map"
-            className="relative h-52 w-full cursor-crosshair overflow-hidden rounded-lg border border-border bg-[linear-gradient(rgba(204,47,16,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(204,47,16,.08)_1px,transparent_1px)] bg-[size:24px_24px]"
-            onClick={chooseMapLocation}
-          >
-            <span
-              className="absolute h-4 w-4 -translate-x-1/2 -translate-y-full rounded-full border-2 border-white bg-primary shadow"
-              style={{
-                left: `${((longitude + 180) / 360) * 100}%`,
-                top: `${((90 - latitude) / 180) * 100}%`,
-              }}
-            />
-          </button>
+          <div className="h-52 w-full overflow-hidden rounded-lg border border-border">
+            <MapContainer
+              center={[latitude, longitude]}
+              zoom={5}
+              minZoom={2}
+              dragging={false}
+              touchZoom={false}
+              scrollWheelZoom={false}
+              doubleClickZoom={false}
+              boxZoom={false}
+              keyboard={false}
+              className="h-full w-full"
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <LocationMapView latitude={latitude} longitude={longitude} />
+              <Marker
+                position={[latitude, longitude]}
+                icon={L.divIcon({
+                  className: 'regionism-marker',
+                  html: '<span></span>',
+                  iconSize: [22, 30],
+                  iconAnchor: [11, 30],
+                  popupAnchor: [0, -28],
+                })}
+              />
+            </MapContainer>
+          </div>
           <p className="text-xs text-muted-foreground">
             Approximate point: {rounded(latitude).toFixed(2)}, {rounded(longitude).toFixed(2)}
           </p>
@@ -163,6 +190,28 @@ function AuthenticatedHome({ userId }: { userId: string }) {
   )
 }
 
+function MapSelection({
+  selectedPinId,
+  pins,
+}: {
+  selectedPinId: string | null
+  pins: Array<{ recordId: string; data: Pin }>
+}) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!selectedPinId) return
+    const selected = pins.find(({ recordId }) => recordId === selectedPinId)
+    if (selected) {
+      map.flyTo([selected.data.lat, selected.data.lng], Math.max(map.getZoom(), 5), {
+        duration: 0.5,
+      })
+    }
+  }, [map, pins, selectedPinId])
+
+  return null
+}
+
 function RegionMap({
   profile,
   pins,
@@ -178,14 +227,34 @@ function RegionMap({
   const [word, setWord] = useState('')
   const [meaning, setMeaning] = useState('')
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+  const location = useLocation()
+  const stateSelection =
+    (location.state as { selectedPinId?: string } | null)?.selectedPinId
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(stateSelection ?? null)
 
-  const markerIcon = L.divIcon({
+  const markerIcon = (selected = false) => L.divIcon({
     className: 'regionism-marker',
-    html: '<span></span>',
-    iconSize: [22, 30],
-    iconAnchor: [11, 30],
-    popupAnchor: [0, -28],
+    html: `<span${selected ? ' style="box-shadow:0 0 0 5px rgba(204,47,16,.22),0 2px 8px rgba(28,25,23,.28);transform:rotate(-45deg) scale(1.18)"' : ''}></span>`,
+    iconSize: [26, 34],
+    iconAnchor: [13, 34],
+    popupAnchor: [0, -32],
   })
+
+  useEffect(() => {
+    if (stateSelection) setSelectedPinId(stateSelection)
+  }, [stateSelection])
+
+  const filteredPins = pins.filter(({ data }) => {
+    const query = search.trim().toLowerCase()
+    return !query ||
+      data.word.toLowerCase().includes(query) ||
+      data.regionLabel.toLowerCase().includes(query)
+  })
+
+  const selectPin = (recordId: string) => {
+    setSelectedPinId(recordId)
+  }
 
   const savePin = async () => {
     const trimmedWord = word.trim()
@@ -205,6 +274,7 @@ function RegionMap({
         lng: Math.round(profile.homeLng * 100) / 100,
         createdAt: now,
         updatedAt: now,
+        isDefault: false,
       })
       setWord('')
       setMeaning('')
@@ -215,43 +285,85 @@ function RegionMap({
   }
 
   return (
-    <div className="relative h-full min-h-[calc(100vh-48px)] md:min-h-0">
-      <MapContainer
-        center={[profile.homeLat, profile.homeLng]}
-        zoom={3}
-        minZoom={2}
-        scrollWheelZoom
-        className="h-full min-h-[calc(100vh-48px)] w-full md:min-h-0"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {pins.map(({ recordId, data }) => (
-          <Marker
-            key={recordId}
-            position={[data.lat, data.lng]}
-            icon={markerIcon}
-          >
-            <Popup>
-              <article className="min-w-48 text-foreground">
-                <h2 className="text-base font-semibold">{data.word}</h2>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{data.meaning}</p>
-                <p className="mt-2 text-xs font-medium text-primary">{data.regionLabel}</p>
-              </article>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+    <div className="grid h-full md:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="relative h-full md:order-2">
+        <MapContainer
+          center={[profile.homeLat, profile.homeLng]}
+          zoom={3}
+          minZoom={2}
+          scrollWheelZoom
+          className="h-full w-full"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <MapSelection
+            selectedPinId={selectedPinId}
+            pins={pins}
+          />
+          {pins.map(({ recordId, data }) => (
+            <Marker
+              key={recordId}
+              position={[data.lat, data.lng]}
+              icon={markerIcon(recordId === selectedPinId)}
+              eventHandlers={{ click: () => selectPin(recordId) }}
+            >
+              <Popup>
+                <article className="min-w-48 text-foreground">
+                  <h2 className="text-base font-semibold">{data.word}</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{data.meaning}</p>
+                  <p className="mt-2 text-xs font-medium text-primary">{data.regionLabel}</p>
+                </article>
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
 
-      <button
-        type="button"
-        aria-label="Create a pin"
-        onClick={() => setCreateOpen(true)}
-        className="absolute bottom-20 right-5 z-[1000] flex h-14 w-14 items-center justify-center rounded-full bg-primary text-3xl leading-none text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:bottom-6 md:right-6"
-      >
-        +
-      </button>
+        <button
+          type="button"
+          aria-label="Create a pin"
+          onClick={() => setCreateOpen(true)}
+          className="absolute bottom-20 right-5 z-[1000] flex h-14 w-14 items-center justify-center rounded-full bg-primary text-3xl leading-none text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:bottom-6 md:right-6"
+        >
+          +
+        </button>
+      </div>
+
+      <aside className="hidden min-h-0 border-r border-border bg-card md:order-1 md:flex md:flex-col">
+        <div className="border-b border-border p-4">
+          <SearchInput
+            aria-label="Search pins"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onClear={() => setSearch('')}
+            placeholder="Search word or region"
+            className="mt-3"
+          />
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          {filteredPins.length === 0 ? (
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+              No regionalisms found.
+            </p>
+          ) : filteredPins.map(({ recordId, data }) => (
+            <button
+              key={recordId}
+              type="button"
+              onClick={() => selectPin(recordId)}
+              className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                recordId === selectedPinId
+                  ? 'border-primary/50 bg-primary/10'
+                  : 'border-transparent hover:border-border hover:bg-muted'
+              }`}
+            >
+              <span className="block font-semibold text-foreground">{data.word}</span>
+              <span className="mt-1 block text-xs text-primary">{data.regionLabel}</span>
+              <span className="mt-1 block text-sm text-muted-foreground line-clamp-2">{data.meaning}</span>
+            </button>
+          ))}
+        </div>
+      </aside>
 
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} size="sm">
         <Modal.Header>

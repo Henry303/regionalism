@@ -40,7 +40,10 @@ export default function Navigation() {
       <nav
         data-testid="app-navigation"
         aria-label="Main navigation"
-        className="fixed right-4 top-4 z-[1100] hidden items-center gap-2 rounded-full border border-border bg-card/95 px-4 py-2 shadow-lg backdrop-blur md:flex"
+        className={cn(
+          'fixed top-4 z-[1100] hidden items-center gap-2 rounded-full border border-border bg-card/95 px-4 py-2 shadow-lg backdrop-blur md:flex',
+          'right-4',
+        )}
       >
           <span className="cursor-default text-sm font-semibold text-foreground">
             {APP_NAME}
@@ -51,7 +54,7 @@ export default function Navigation() {
 
       <nav
         aria-label="Mobile navigation"
-        className="fixed inset-x-0 bottom-0 z-[1100] grid h-16 grid-cols-3 border-t border-border bg-card md:hidden"
+        className="fixed bottom-3 left-1/2 z-[1100] grid h-16 w-[calc(100%-24px)] max-w-md -translate-x-1/2 grid-cols-3 rounded-full border border-border bg-card/95 px-2 shadow-lg backdrop-blur md:hidden"
       >
         <Link
           to="/home"

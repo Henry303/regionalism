@@ -1,16 +1,55 @@
-import { List } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery } from 'deepspace'
+import { SearchInput } from '@/components/ui'
 
-export default function PinListPlaceholder() {
+interface Pin {
+  id: string
+  word: string
+  meaning: string
+  regionLabel: string
+  lat: number
+  lng: number
+}
+
+export default function PinListPage() {
+  const { records, status } = useQuery<Pin>('pins')
+  const [search, setSearch] = useState('')
+  const navigate = useNavigate()
+  const query = search.trim().toLowerCase()
+  const filtered = records.filter(({ data }) =>
+    !query ||
+    data.word.toLowerCase().includes(query) ||
+    data.regionLabel.toLowerCase().includes(query),
+  )
+
   return (
-    <div className="flex min-h-[60vh] items-center justify-center px-6 text-center">
-      <div>
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <List className="h-6 w-6" />
-        </div>
-        <h1 className="mt-4 text-xl font-semibold">Pin list</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Searchable regionalisms arrive in milestone 3.
-        </p>
+    <div className="mx-auto min-h-full max-w-2xl px-4 py-6 md:hidden">
+      <SearchInput
+        aria-label="Search pins"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        onClear={() => setSearch('')}
+        placeholder="Search word or region"
+        className="mt-4"
+      />
+      <div className="mt-4 space-y-2">
+        {status === 'loading' ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">Loading regionalisms...</p>
+        ) : filtered.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">No regionalisms found.</p>
+        ) : filtered.map(({ recordId, data }) => (
+          <button
+            key={recordId}
+            type="button"
+            onClick={() => navigate('/home', { state: { selectedPinId: recordId } })}
+            className="min-h-20 w-full rounded-lg border border-border bg-card p-4 text-left transition-colors hover:border-primary/40"
+          >
+            <span className="block font-semibold text-foreground">{data.word}</span>
+            <span className="mt-1 block text-xs font-medium text-primary">{data.regionLabel}</span>
+            <span className="mt-1 block text-sm leading-relaxed text-muted-foreground">{data.meaning}</span>
+          </button>
+        ))}
       </div>
     </div>
   )

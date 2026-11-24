@@ -40,12 +40,12 @@ test.describe('Smoke tests', () => {
   test('login landing mounts auth', async ({ page }) => {
     await page.goto('/')
     await expect(page.getByTestId('regionalism-login')).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Log in to Region-ism' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Log in to Regionalism' })).toBeVisible()
   })
 
   test('signed-out visitor sees no app navigation on /home', async ({ page }) => {
     await page.goto('/home')
-    await expect(page.getByRole('heading', { name: 'Log in to Region-ism' })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole('heading', { name: 'Log in to Regionalism' })).toBeVisible({ timeout: 15000 })
     await expect(page.getByTestId('app-navigation')).toHaveCount(0)
   })
 

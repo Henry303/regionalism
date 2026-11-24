@@ -13,6 +13,7 @@ export const pinsSchema: CollectionSchema = {
     { name: 'lng', storage: 'number', interpretation: 'plain', required: true },
     { name: 'createdAt', storage: 'number', interpretation: 'datetime', required: true },
     { name: 'updatedAt', storage: 'number', interpretation: 'datetime', required: true },
+    { name: 'isDefault', storage: 'number', interpretation: { kind: 'boolean' }, required: false },
   ],
   permissions: {
     '*': { read: false, create: false, update: false, delete: false },
@@ -22,7 +23,7 @@ export const pinsSchema: CollectionSchema = {
       create: true,
       update: 'own',
       delete: 'own',
-      writableFields: ['word', 'meaning', 'regionLabel', 'lat', 'lng', 'createdAt', 'updatedAt'],
+      writableFields: ['word', 'meaning', 'regionLabel', 'lat', 'lng', 'createdAt', 'updatedAt', 'isDefault'],
     },
     admin: { read: true, create: true, update: true, delete: true },
   },

@@ -32,7 +32,7 @@ function SignedOutPanel() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-6 py-20">
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 text-center">
-        <h1 className="text-lg font-semibold text-foreground">Log in to Region-ism</h1>
+        <h1 className="text-lg font-semibold text-foreground">Log in to Regionalism</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           This page is only available to signed-in users.
         </p>
@@ -51,7 +51,7 @@ function SignedOutPanel() {
         <AuthOverlay
           onClose={() => setShowAuthModal(false)}
           providers={['github', 'google']}
-          title="Log in to Region-ism"
+          title="Log in to Regionalism"
           description="Discover and pin regional words"
         />
       )}

@@ -55,7 +55,7 @@ export default function LandingPage() {
           <AuthOverlay
             onClose={() => setShowAuthModal(false)}
             providers={['github', 'google']}
-            title="Log in to Region-ism"
+            title="Log in to Regionalism"
             description="Discover and pin regional words"
           />
         )}

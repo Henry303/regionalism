@@ -17,3 +17,21 @@ export const SAMPLE_PINS: SamplePin[] = [
   { word: 'jigger', meaning: 'A small measure of alcohol.', regionLabel: 'Dublin, Ireland', lat: 53.35, lng: -6.26 },
   { word: 'slip', meaning: 'An underskirt or lightweight garment worn beneath a dress.', regionLabel: 'Boston, MA, USA', lat: 42.36, lng: -71.06 },
 ]
+
+export function isDefaultSamplePin(pin: {
+  word: string
+  meaning: string
+  regionLabel: string
+  lat: number
+  lng: number
+  isDefault?: boolean
+}) {
+  if (pin.isDefault) return true
+  return SAMPLE_PINS.some((sample) =>
+    sample.word === pin.word &&
+    sample.meaning === pin.meaning &&
+    sample.regionLabel === pin.regionLabel &&
+    sample.lat === pin.lat &&
+    sample.lng === pin.lng,
+  )
+}

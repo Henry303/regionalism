@@ -1,7 +1,7 @@
-# Region-ism — Project Spec
+# Regionalism — Project Spec
 
 ## Overview
-**Region-ism** is a full-stack interactive web app built on the **DeepSpace SDK** where users discover and pin regional English dialect words and phrases on a world map. New pins sync in real time across users without exposing any personal information about who submitted them.
+**Regionalism** is a full-stack interactive web app built on the **DeepSpace SDK** where users discover and pin regional English dialect words and phrases on a world map. New pins sync in real time across users without exposing any personal information about who submitted them.
 
 ## Tech Stack & Conventions
 - **Framework:** DeepSpace SDK (Vite + React + TypeScript frontend, Cloudflare Worker backend). Follow all SDK patterns in `AGENTS.md`.
